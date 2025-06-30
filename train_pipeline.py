@@ -1,9 +1,10 @@
 import sys
 import yaml
 from pathlib import Path
-from tools.data_prep import make_pretrain_data, make_instruct_data
 from tools.unsloth_finetuning import DocumentFineTune
 
+import os
+os.environ["UNSLOTH_USE_CUT_CROSSENTROPY"] = "0"
 
 def load_config(config_path):
     with open(config_path, "r") as f:
@@ -12,16 +13,18 @@ def load_config(config_path):
 def main(config_path: str):
     config = load_config(config_path)
     
-    data_cfg = config["data"]
-    data_path = data_cfg["data_dir"]
-
-    train_cfg = config["train"]
+    train_cfg = config["train"]    
     train_mode = train_cfg.get("mode", "pretrain")
-
+    data_path = train_cfg["data_dir"]
+    
     if train_mode == "pretrain":
         data_path = Path(data_path) / "pretrain.jsonl"
-    else:
+    elif train_mode == "instruct":
         data_path = Path(data_path) / "instruct.jsonl"
+    else:
+        raise Exception(f"{train_mode} training not supported")
+
+    training_args = train_cfg['training_args']
 
     trainer = DocumentFineTune(
         training_data_path = str(data_path),
