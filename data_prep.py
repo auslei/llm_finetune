@@ -109,13 +109,14 @@ def save_json_dataset(records: Union[List[dict], Dataset], path: Union[str, Path
     return {"path": str(path)}
 
 def read_and_chunk_document(
-    source: Union[str, Path],
+    source: Union[str, Path],    
+    chunk_size,
+    chunk_overlap,
     mode: str = "simple",
-    chunk_size: int = 1500,
-    chunk_overlap: int = 200
 ) -> List[str]:
     """Read and chunk a document from file path."""
     text = load_text_file(source, mode)
+    logger.info(f"{source} loaded with {len(text)} characters")
     return chunk_text_by_characters(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
@@ -172,7 +173,7 @@ def make_instruct_data(
 
 if __name__ == "__main__":
 
-    INPUT_DOC = "docs/zarnian_lore.txt"
+    INPUT_DOC = "docs/zarnian_lore_new.txt"
     ENTITY = "Zarnian"
     DOC_TYPE = "Zarnian Lore"
     OLLAMA_MODEL = "mistral"
@@ -180,8 +181,8 @@ if __name__ == "__main__":
     DATA_PATH = Path(f"data/{ENTITY}")
     DATA_PATH.mkdir(parents=True, exist_ok=True)
 
-    TEXT_CHUNK_SIZE = 1500
-    TEXT_CHUNK_OVERLAP = 150
+    TEXT_CHUNK_SIZE = 1024
+    TEXT_CHUNK_OVERLAP = 200
 
     logger.info(f"Reading and chunking document: {INPUT_DOC}")
     chunks = read_and_chunk_document(

@@ -279,11 +279,12 @@ if __name__ == "__main__":
     # Define your training parameters
     TRAINING_DATA_PATH = "data/pirate/pirate_pretrain_strong.jsonl" # Path to your JSONL file or directory
     TRAINING_DATA_PATH = "data/pirate/pirate_instruct.jsonl" # Path to your JSONL file or directory
-    MODEL_NAME = "pirate_instruct"
+    TRAINING_DATA_PATH = "data/Zarnian/pretrain.jsonl" # Path to your JSONL file or directory
+    MODEL_NAME = "zarnian"
     BASE_MODEL = "unsloth/llama-3-8b-bnb-4bit" # Or "unsloth/mistral-7b-bnb-4bit"
     BASE_MODEL = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
     MAX_SEQ_LENGTH = 512 # Adjust based on your data and GPU memory
-    TRAINING_MODE = "instruct" # "pretrain" for long documents, "instruct" for Q&A/chat
+    TRAINING_MODE = "pretrain" # "pretrain" for long documents, "instruct" for Q&A/chat
 
     try:
         fine_tuner = DocumentFineTune(
