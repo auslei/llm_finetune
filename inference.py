@@ -71,7 +71,7 @@ def run_chatbot_inference(lora_weights_path: Path, max_seq_length: int = 512):
             continue
 
 if __name__ == "__main__":
-    MODEL_NAME = "pirate_instruct"
+    MODEL_NAME = "zarnian"
     MAX_SEQ_LENGTH = 512
     LORA_WEIGHTS_LOCATION = Path(f"models/{MODEL_NAME}")
 
