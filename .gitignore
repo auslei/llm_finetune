@@ -1,2 +1,8 @@
 *cache*
 __pycache__
+models
+llama.cpp
+checkpoints
+.ipynb_checkpoints
+data
+
