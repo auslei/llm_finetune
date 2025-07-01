@@ -6,3 +6,4 @@ checkpoints
 .ipynb_checkpoints
 adapters
 mac/adapters
+mac/.env
