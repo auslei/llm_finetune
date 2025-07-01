@@ -5,4 +5,5 @@ llama.cpp
 checkpoints
 .ipynb_checkpoints
 data
-
+adapters
+mac/adapters
