@@ -4,5 +4,4 @@ models
 llama.cpp
 checkpoints
 .ipynb_checkpoints
-data
 

@@ -1,0 +1,11 @@
+name: unsloth3.11
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - unsloth
+  - ollama
+  - jupyter
+  - pdfplumber
+  - pymupdf4llm
+prefix: /home/anthony/miniconda3/envs/unsloth3.11
