@@ -13,9 +13,10 @@ This repository provides a complete pipeline for fine-tuning and continually pre
 - 🧪 Test your custom model via terminal chatbot interface
 - ✅ Sample finetunes: Pirate Instruct, Zarnian Lore, CV domain expertise
 
----
 
 ## 🗂 Project Structure
+
+```
 llm_finetune/
 ├── data/ # Preprocessed training datasets (.jsonl)
 ├── docs/ # Raw source texts (.txt or PDFs)
@@ -26,6 +27,7 @@ llm_finetune/
 │ └── inference.py # Simple chatbot for inference
 ├── requirements.txt
 └── README.md
+```
 
 ## 📄 1. Preparing Your Data
 
