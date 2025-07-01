@@ -6,6 +6,7 @@ from typing import Union, Optional, List
 from datasets import Dataset
 from ollama import Client
 import pdfplumber
+import tiktoken
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
@@ -35,44 +36,6 @@ def read_text(path: Union[str, Path], mode: str = "simple") -> str:
     if path.suffix.lower() == ".pdf":
         return read_pdf(path, mode=mode)
     return path.read_text(encoding="utf-8")
-
-def split_paragraphs(text: str) -> List[str]:
-    """
-    Split text into clean paragraphs.
-    """
-    #parts = re.split(r'(?<=\.)\s+(?=[A-Z])|\n{2,}', text.strip())
-    #ret_val = [p.strip() for p in parts if len(p.strip()) > 0]
-    ret_val = chunk_text_by_charcters(large_text = text, chunk_size = 200, chunk_overlap = 50)
-    return ret_val
-
-def split_with_overlap(text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
-    """
-    Split text into overlapping chunks for better context preservation.
-    """
-    text = re.sub(r'\s+', ' ', text.strip())  # Normalize whitespace
-    chunks = []
-    start = 0
-
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-
-        # Try to end at a natural sentence boundary
-        if end < len(text):
-            last_period = chunk.rfind('.')
-            if 0 < last_period > 0.5 * chunk_size:
-                end = start + last_period + 1
-                chunk = text[start:end]
-
-        chunks.append(chunk.strip())
-
-        # Ensure we make progress
-        next_start = max(start + 1, end - overlap)
-        if next_start <= start:
-            break  # Safety stop
-        start = next_start
-
-    return chunks
 
 
 def chunk_text_by_tokens(large_text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
@@ -105,7 +68,22 @@ def chunk_text_by_tokens(large_text: str, chunk_size: int, chunk_overlap: int) -
         start += chunk_size - chunk_overlap
     return chunks
 
-def chunk_text_by_charcters(large_text: str,  chunk_size: int, chunk_overlap: int, separators: list[str] = ["\n\n", "\n", " ", ""]) -> list[str]:
+
+def deduplicate_chunks(chunks: List[str]) -> List[str]:
+    """
+    Deduplicate chunks but preserve orders
+    """
+    seen = set()
+    unique = []
+    for c in chunks:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+    return unique
+
+
+def chunk_text_by_charcters(large_text: str,  chunk_size: int = 512, chunk_overlap: int =64, 
+                            separators: list[str] = ["\n\n", "\n", " ", ""], dedup = True) -> list[str]:
         """
         Split large text into smaller chunks. Uses configuration values by default, 
         but the user can override chunk_size, chunk_overlap, and separators.
@@ -116,7 +94,12 @@ def chunk_text_by_charcters(large_text: str,  chunk_size: int, chunk_overlap: in
             length_function=len,
             separators=separators
         )
-        return text_splitter.split_text(large_text)
+
+        chunks = text_splitter.split_text(large_text)
+
+        if dedup:
+            chunks = deduplicate_chunks(chunks)
+        return chunks
 
 def add_identity(text: str, entity: str, doc_type: str) -> str:
     """
@@ -145,27 +128,28 @@ def save_dataset(ds: Dataset, output_file: Union[str, Path]) -> dict:
 
     return saved
 
+def read_and_chunk_document(source: Union[str, Path], mode: str = "simple", chunk_size: int = 1500, chunk_overlap: int = 200) -> list[str]:
+    """
+    Read and chunk a document.
+    """
+    text = read_text(source, mode)
+    return chunk_text_by_charcters(large_text = text, chunk_size = chunk_size, chunk_overlap =  chunk_overlap)
+
 def make_pretrain_data(
-    source: Union[str, Path],
+    chunks: list[str],
     output_file: Union[str, Path],
     entity: str = "Unknown",
     doc_type: str = "document",
-    min_len: int = 40,
     inject: bool = True,
-    mode: str = "simple"
-) -> dict:
+    ) -> dict:
     """
-    Generate continual pretraining data from a document.
-    """
-    text = read_text(source, mode)
-    paras = split_paragraphs(text)
-
+    Prepare chunked text for causal-style fine-tuning using a uniform overlapping split.
+    """    
     items = []
-    for p in paras:
-        if len(p) >= min_len:
-            if inject:
-                p = add_identity(p, entity, doc_type)
-            items.append({"text": p})
+    for p in chunks:       
+        if inject:
+            p = add_identity(p, entity, doc_type)
+        items.append({"text": p})
 
     if not items:
         raise ValueError("No valid paragraphs found.")
@@ -174,24 +158,18 @@ def make_pretrain_data(
     return save_dataset(ds, output_file)
 
 def make_instruct_data(
-    source: Union[str, Path],
+    chunks: list[str],
     output_file: Union[str, Path],
-    entity: str = "Unknown",
-    doc_type: str = "document",
-    min_len: int = 40,
-    mode: str = "columns",
     model: str = "mistral",
     max_q: int = 3,
     delay: float = 0.5
 ) -> dict:
     """
     Generate instruction-style Q&A data from document using Ollama.
-    """
-    text = read_text(source, mode)
-    paras = [p for p in split_paragraphs(text) if len(p) >= min_len]
+    """    
 
     results = []
-    for p in paras:
+    for p in chunks:
         prompt = (
             f"Given the following paragraph from {entity}'s {doc_type}, generate up to {max_q} realistic questions and answers "
             f"in JSON format as a list of conversation pairs.\n\nParagraph:\n{p}\n\nFormat:\n"

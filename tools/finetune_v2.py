@@ -124,7 +124,7 @@ class DocumentFineTune:
 
         # Load dataset from JSONL file(s)
         try:
-            dataset: DatasetDict = load_dataset("json", data_files=files)
+            dataset = load_dataset("json", data_files=files)
             logger.info(f"Initial dataset loaded. Example: {dataset['train'][0]}")
         except Exception as e:
             logger.critical(f"Failed to load dataset from {files}: {e}")
@@ -154,24 +154,28 @@ class DocumentFineTune:
             if "conversations" in self.train_dataset.column_names:
                 logger.info("Applying chat template for 'conversations' field...")
                 def formatting_prompts_func(examples):
-                    all_convos = examples["conversations"] # List of conversation dictionaries per batch
+                    all_convos = examples["conversations"]
                     texts = []
-                    for convo in all_convos:
-                        # Apply chat template to each conversation.
-                        # tokenize=False means we get the raw string, SFTTrainer will tokenize later.
-                        # add_generation_prompt=False means we don't add the special token
-                        # that encourages the model to generate the next turn in a dialogue.
-                        texts.append(self.tokenizer.apply_chat_template(
-                            convo,
-                            tokenize=False,
-                            add_generation_prompt=False
-                        ))
+                    for i, convo in enumerate(all_convos):
+                        try:
+                            # logger.info(f"Processing conversation {i} in batch: {convo}") # Too verbose for large batches
+                            text = self.tokenizer.apply_chat_template(
+                                convo,
+                                tokenize=False,
+                                add_generation_prompt=False
+                            )
+                            texts.append(text)
+                        except Exception as e:
+                            logger.error(f"Error applying chat template to conversation {i} in batch: {convo}. Error: {e}")
+                            # Depending on severity, you might want to raise, skip, or return an empty string
+                            texts.append("") # Or raise the exception if you want to stop on error
                     return {"text": texts}
 
                 # Map the formatting function to both train and validation datasets
-                self.train_dataset = self.train_dataset.map(formatting_prompts_func, batched=True, num_proc=os.cpu_count() or 1)
+                self.train_dataset = self.train_dataset.map(formatting_prompts_func, batched=True)                
                 if self.val_dataset:
-                    self.val_dataset = self.val_dataset.map(formatting_prompts_func, batched=True, num_proc=os.cpu_count() or 1)
+                    self.val_dataset = self.val_dataset.map(formatting_prompts_func, batched=True)
+                logger.info(self.train_dataset[0])
                 logger.info("Chat template applied successfully.")
             else:
                 logger.warning("No 'conversations' column found for 'instruct' mode. Ensure 'text' column is pre-formatted for instruction tuning.")
@@ -209,7 +213,7 @@ class DocumentFineTune:
             per_device_train_batch_size=2, # Batch size per GPU
             gradient_accumulation_steps=4, # Accumulate gradients over N steps
             learning_rate=2e-5, # Initial learning rate
-            num_train_epochs=2, # Number of training epochs
+            num_train_epochs=30, # Number of training epochs
             warmup_steps=10, # Number of warmup steps for learning rate scheduler
             logging_steps=10, # Log training progress every N steps
             optim="adamw_8bit", # Optimizer to use (8-bit AdamW for memory efficiency)
@@ -219,9 +223,10 @@ class DocumentFineTune:
             report_to="none", # Disable reporting to services like Weights & Biases
             # You can add evaluation arguments here if self.val_dataset is available
             # For example:
-            # evaluation_strategy="steps" if self.val_dataset else "no",
-            # eval_steps=100 if self.val_dataset else None,
-            # load_best_model_at_end=True if self.val_dataset else False,
+            eval_strategy="epoch" if self.val_dataset else "no",
+            eval_steps=2 if self.val_dataset else None,
+            save_strategy="epoch",
+            load_best_model_at_end=True if self.val_dataset else False,
         )
         logger.info(f"SFTConfig initialized: {training_args}")
 
@@ -247,8 +252,8 @@ class DocumentFineTune:
         self.model_lora_weights_location.mkdir(parents=True, exist_ok=True) # Ensure directory exists
         self.model.save_pretrained(
             self.model_lora_weights_location,
-            save_method="lora", # Save only the LoRA weights
-            safe_serialization=False # Disable safe serialization for potentially faster saving
+            #save_method="lora", # Save only the LoRA weights
+            #safe_serialization=False # Disable safe serialization for potentially faster saving
         )
         logger.info(f"✅ LoRA weights saved to {self.model_lora_weights_location}")
 
@@ -272,11 +277,13 @@ class DocumentFineTune:
 # Example Usage (consider wrapping this in a main block if this is a script)
 if __name__ == "__main__":
     # Define your training parameters
-    TRAINING_DATA_PATH = "data/bible" # Path to your JSONL file or directory
-    MODEL_NAME = "llama3-bible-style"
+    TRAINING_DATA_PATH = "data/pirate/pirate_pretrain_strong.jsonl" # Path to your JSONL file or directory
+    TRAINING_DATA_PATH = "data/pirate/pirate_instruct.jsonl" # Path to your JSONL file or directory
+    MODEL_NAME = "pirate_instruct"
     BASE_MODEL = "unsloth/llama-3-8b-bnb-4bit" # Or "unsloth/mistral-7b-bnb-4bit"
-    MAX_SEQ_LENGTH = 2048 # Adjust based on your data and GPU memory
-    TRAINING_MODE = "pretrain" # "pretrain" for long documents, "instruct" for Q&A/chat
+    BASE_MODEL = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
+    MAX_SEQ_LENGTH = 512 # Adjust based on your data and GPU memory
+    TRAINING_MODE = "instruct" # "pretrain" for long documents, "instruct" for Q&A/chat
 
     try:
         fine_tuner = DocumentFineTune(
