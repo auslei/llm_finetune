@@ -169,24 +169,43 @@ def make_instruct_data(
     entity: str = "Unknown",
     doc_type: str = "document"
 ) -> dict:
-    """Generate instruction-style Q&A pairs using Ollama."""
-    items = []
+    """Generate instruction-style Q&A pairs using Ollama, with JSON extraction and validation."""
+    items: List[dict] = []
 
-    for p in chunks:
+    for idx, p in enumerate(chunks):
+        snippet = p.strip().replace("\n", " ")[:2000]
         prompt = (
-            f"Given the following paragraph from {entity}'s {doc_type}, generate up to {max_q} realistic questions and answers "
-            f"in JSON format as a list of conversation pairs.\n\nParagraph:\n{p}\n\nFormat:\n"
-            "[\n  {\"role\": \"user\", \"content\": \"...\"},\n  {\"role\": \"assistant\", \"content\": \"...\"},\n  ...\n]"
+            f"You are a helpful Q&A assistant. Produce up to {max_q} question-answer pairs in strict JSON format "
+            f"as an array of objects with 'question' and 'answer' fields.\n\n"
+            f"Paragraph:\n{snippet}...\n\nRespond with JSON only, no extra text."
         )
         try:
-            logger.info("Sending prompt to model...")
+            logger.info(f"Generating Q&A for chunk {idx}...")
             res = client.generate(model=model, prompt=prompt)
-            pairs = json.loads(res["response"].strip())
-            if isinstance(pairs, list):
-                items.append({"conversations": pairs})
-                logger.debug(f"Generated pairs: {pairs}")
+            text = res.get("response", "")
+            start = text.find('[')
+            end = text.rfind(']')
+            raw = text[start : end + 1] if 0 <= start < end else text.strip()
+            pairs = json.loads(raw)
+            valid: List[dict] = []
+            for qa in pairs if isinstance(pairs, list) else []:
+                if isinstance(qa, dict) and 'question' in qa and 'answer' in qa:
+                    valid.append({
+                        'question': str(qa['question']).strip(),
+                        'answer': str(qa['answer']).strip()
+                    })
+            if valid:
+                items.append({
+                    'entity': entity,
+                    'doc_type': doc_type,
+                    'chunk_index': idx,
+                    'question_answer_pairs': valid
+                })
+                logger.debug(f"Chunk {idx} valid Q&A count: {len(valid)}")
+            else:
+                logger.warning(f"No valid Q&A extracted for chunk {idx}")
         except Exception as e:
-            logger.warning(f"Failed on paragraph: {e}")
+            logger.warning(f"Error generating Q&A for chunk {idx}: {e}")
         time.sleep(delay)
 
     if not items:
