@@ -1,7 +1,7 @@
 from datasets import load_dataset
 import json
 from pathlib import Path
-from finetune_v2 import DocumentFineTune
+from llm_finetune.finetune_tool import DocumentFineTune
 
 # Step 1: Download dataset from Hugging Face
 dataset = load_dataset("AISPIN/shiji-70liezhuan")
