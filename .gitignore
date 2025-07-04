@@ -1,9 +1,32 @@
-*cache*
-__pycache__
-models
-llama.cpp
-checkpoints
-.ipynb_checkpoints
-adapters
-mac/adapters
-mac/.env
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Environment files and virtual environments
+.env
+env/
+venv/
+
+# Node modules
+node_modules/
+
+# Dependencies installed by pip or poetry
+*.egg-info/
+dist/
+
+# Model artifacts and outputs (auto-generated)
+llama.cpp/
+mac/
+unsloth_compiled_cache/
+outputs/
+checkpoints/
+
+# IDE settings
+.vscode/
