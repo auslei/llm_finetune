@@ -76,46 +76,48 @@ with st.sidebar.expander("1️⃣ Data Preparation", expanded=True):
             st.session_state["data_path"] = str(out_file)
 
 # -- Sidebar: Training -------------------------------------
-st.sidebar.header("2. Train Model")
-data_path = st.sidebar.text_input(
-    "Prepared data path", value=st.session_state.get("data_path", "")
-)
-base_model = st.sidebar.text_input(
-    "Base model", value="unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
-)
-model_name = st.sidebar.text_input(
-    "Model name", value="app_model"
-)
-epochs = st.sidebar.number_input("Epochs", min_value=1, value=1)
+if mode == "Train Model":
+    st.sidebar.header("2️⃣ Train Model")
+    data_path = st.sidebar.text_input(
+        "Prepared data path", value=st.session_state.get("data_path", "")
+    )
+    base_model = st.sidebar.text_input(
+        "Base model", value="unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
+    )
+    model_name = st.sidebar.text_input(
+        "Model name", value="app_model"
+    )
+    epochs = st.sidebar.number_input("Epochs", min_value=1, value=1)
 
-if st.sidebar.button("Train"):
-    if not data_path:
-        st.sidebar.error("Set the prepared data path first.")
-    else:
-        with st.spinner("Training model..."):
-            tuner = DocumentFineTune(
-                training_data_path=data_path,
-                model_name=model_name,
-                base_model_path=base_model,
-                max_seq_length=chunk_size,
-                training_mode=prep_mode,
-            )
-            tuner.train(num_train_epochs=epochs)
-        st.success(f"Training complete. Weights at models/{model_name}")
-        st.session_state["model_dir"] = f"models/{model_name}"
+    if st.sidebar.button("Start Training"):
+        if not data_path:
+            st.sidebar.error("Set the prepared data path first.")
+        else:
+            with st.spinner("Training model..."):
+                tuner = DocumentFineTune(
+                    training_data_path=data_path,
+                    model_name=model_name,
+                    base_model_path=base_model,
+                    max_seq_length=chunk_size,
+                    training_mode=prep_mode,
+                )
+                tuner.train(num_train_epochs=epochs)
+            st.success(f"Training complete. Weights at models/{model_name}")
+            st.session_state["model_dir"] = f"models/{model_name}"
 
 # -- Sidebar: Chat ------------------------------------------
-st.sidebar.header("3. Chat with Model")
-# List trained model directories under models/
-model_dirs = [str(p) for p in Path("models").iterdir() if p.is_dir()]
-if not model_dirs:
-    st.sidebar.warning("No trained models found in 'models/' directory.")
-selected = st.session_state.get("model_dir", "")
-model_dir = st.sidebar.selectbox(
-    "Model directory",
-    options=model_dirs,
-    index=model_dirs.index(selected) if selected in model_dirs else 0,
-)
+if mode == "Chat":
+    st.sidebar.header("3️⃣ Chat with Model")
+    # List trained model directories under models/
+    model_dirs = [str(p) for p in Path("models").iterdir() if p.is_dir()]
+    if not model_dirs:
+        st.sidebar.warning("No trained models found in 'models/' directory.")
+    selected = st.session_state.get("model_dir", "")
+    model_dir = st.sidebar.selectbox(
+        "Model directory",
+        options=model_dirs,
+        index=model_dirs.index(selected) if selected in model_dirs else 0,
+    )
 @st.cache_resource
 def load_chat_model(path, max_len):
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -129,33 +131,33 @@ def load_chat_model(path, max_len):
 
 st.subheader("💬 Chat")
 st.markdown("Interact with your trained model.\n---")
-for usr, bot in st.session_state.get("history", []):
-    st.markdown(f"**You:** {usr}")
-    st.markdown(f"**Bot:** {bot}")
 
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_input("Your message:")
-    submit = st.form_submit_button("Send")
-    if submit and user_input:
-        if not model_dir:
-            st.warning("Select a model directory in the sidebar first.")
-        else:
-            model, tokenizer = load_chat_model(model_dir, chunk_size)
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            inputs = tokenizer.apply_chat_template(
-                [{"role": "user", "content": user_input}],
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors="pt",
-            ).to(device)
-            pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
-            outputs = model.generate(
-                inputs,
-                max_new_tokens=256,
-                pad_token_id=pad_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
-            resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-            history = st.session_state.get("history", [])
-            history.append((user_input, resp))
-            st.session_state["history"] = history
+for usr, bot in st.session_state.get("history", []):
+    st.chat_message("user").write(usr)
+    st.chat_message("assistant").write(bot)
+
+user_input = st.chat_input("Your message:")
+if user_input:
+    if not model_dir:
+        st.warning("Select a model directory in the sidebar first.")
+    else:
+        model, tokenizer = load_chat_model(model_dir, chunk_size)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        inputs = tokenizer.apply_chat_template(
+            [{"role": "user", "content": user_input}],
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        ).to(device)
+        pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
+        outputs = model.generate(
+            inputs,
+            max_new_tokens=256,
+            pad_token_id=pad_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+        resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+        history = st.session_state.get("history", [])
+        history.append((user_input, resp))
+        st.session_state["history"] = history
+        st.chat_message("assistant").write(resp)
