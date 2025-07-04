@@ -116,8 +116,6 @@ model_dir = st.sidebar.selectbox(
     options=model_dirs,
     index=model_dirs.index(selected) if selected in model_dirs else 0,
 )
-user_input = st.sidebar.text_input("Your message:")
-
 @st.cache_resource
 def load_chat_model(path, max_len):
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -129,31 +127,35 @@ def load_chat_model(path, max_len):
     FastLanguageModel.for_inference(model)
     return model, tokenizer
 
-if st.sidebar.button("Send"):
-    if model_dir and user_input:
-        model, tokenizer = load_chat_model(model_dir, chunk_size)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        inputs = tokenizer.apply_chat_template(
-            [{"role": "user", "content": user_input}],
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-        ).to(device)
-        pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
-        outputs = model.generate(
-            inputs,
-            max_new_tokens=256,
-            pad_token_id=pad_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-        resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-        history = st.session_state.get("history", [])
-        history.append((user_input, resp))
-        st.session_state["history"] = history
-    else:
-        st.sidebar.error("Set model_dir and enter a message.")
-
-st.header("Chat History")
+st.subheader("💬 Chat")
+st.markdown("Interact with your trained model.\n---")
 for usr, bot in st.session_state.get("history", []):
     st.markdown(f"**You:** {usr}")
     st.markdown(f"**Bot:** {bot}")
+
+with st.form(key="chat_form", clear_on_submit=True):
+    user_input = st.text_input("Your message:")
+    submit = st.form_submit_button("Send")
+    if submit and user_input:
+        if not model_dir:
+            st.warning("Select a model directory in the sidebar first.")
+        else:
+            model, tokenizer = load_chat_model(model_dir, chunk_size)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            inputs = tokenizer.apply_chat_template(
+                [{"role": "user", "content": user_input}],
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(device)
+            pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
+            outputs = model.generate(
+                inputs,
+                max_new_tokens=256,
+                pad_token_id=pad_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+            resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+            history = st.session_state.get("history", [])
+            history.append((user_input, resp))
+            st.session_state["history"] = history
