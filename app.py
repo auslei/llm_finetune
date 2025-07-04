@@ -129,14 +129,24 @@ def load_chat_model(path, max_len):
     FastLanguageModel.for_inference(model)
     return model, tokenizer
 
+use_chat_api = hasattr(st, "chat_input") and hasattr(st, "chat_message")
 st.subheader("💬 Chat")
 st.markdown("Interact with your trained model.\n---")
 
-for usr, bot in st.session_state.get("history", []):
-    st.chat_message("user").write(usr)
-    st.chat_message("assistant").write(bot)
+history = st.session_state.get("history", [])
+for usr, bot in history:
+    if use_chat_api:
+        st.chat_message("user").write(usr)
+        st.chat_message("assistant").write(bot)
+    else:
+        st.markdown(f"**You:** {usr}")
+        st.markdown(f"**Bot:** {bot}")
 
-user_input = st.chat_input("Your message:")
+if use_chat_api:
+    user_input = st.chat_input("Your message:")
+else:
+    user_input = st.text_input("Your message:")
+
 if user_input:
     if not model_dir:
         st.warning("Select a model directory in the sidebar first.")
@@ -157,7 +167,9 @@ if user_input:
             eos_token_id=tokenizer.eos_token_id,
         )
         resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-        history = st.session_state.get("history", [])
         history.append((user_input, resp))
         st.session_state["history"] = history
-        st.chat_message("assistant").write(resp)
+        if use_chat_api:
+            st.chat_message("assistant").write(resp)
+        else:
+            st.markdown(f"**Bot:** {resp}")
