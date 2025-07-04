@@ -99,8 +99,15 @@ if st.sidebar.button("Train"):
 
 # -- Sidebar: Chat ------------------------------------------
 st.sidebar.header("3. Chat with Model")
-model_dir = st.sidebar.text_input(
-    "Model directory", value=st.session_state.get("model_dir", "")
+# List trained model directories under models/
+model_dirs = [str(p) for p in Path("models").iterdir() if p.is_dir()]
+if not model_dirs:
+    st.sidebar.warning("No trained models found in 'models/' directory.")
+selected = st.session_state.get("model_dir", "")
+model_dir = st.sidebar.selectbox(
+    "Model directory",
+    options=model_dirs,
+    index=model_dirs.index(selected) if selected in model_dirs else 0,
 )
 user_input = st.sidebar.text_input("Your message:")
 
