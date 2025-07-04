@@ -24,6 +24,8 @@ st.markdown(
     "Use the sidebar to prepare data, train models, or chat with a trained model."
 )
 
+mode = st.sidebar.radio("Mode", ["Data Preparation", "Train Model", "Chat"])
+
 # Sidebar controls grouped in expanders and forms
 with st.sidebar.expander("1️⃣ Data Preparation", expanded=True):
     with st.form(key="prep_form", clear_on_submit=False):
@@ -40,40 +42,40 @@ with st.sidebar.expander("1️⃣ Data Preparation", expanded=True):
         max_q = st.number_input("Max Q&A pairs", value=3, step=1)
         delay = st.number_input("Delay (s)", value=0.5, step=0.1, format="%.2f")
         prep_submit = st.form_submit_button(label="Prepare Data")
-    if prep_submit:
-        if not uploaded_file:
-            st.error("Please upload a file first.")
+if prep_submit:
+    if not uploaded_file:
+        st.error("Please upload a file first.")
+    else:
+        input_path = Path(f"app_input{Path(uploaded_file.name).suffix}")
+        input_path.write_bytes(uploaded_file.getvalue())
+        with st.spinner("Chunking and preparing data..."):
+            chunks = read_and_chunk_document(
+                input_path,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                mode=pdf_mode,
+                chunk_method=chunk_method,
+                dedup=dedup,
+                encoding_name=encoding,
+            )
+        st.success(f"Generated {len(chunks)} chunks.")
+        st.write(chunks[:5])
+        out_file = Path("app_data.jsonl")
+        if prep_mode == "pretrain":
+            make_pretrain_data(chunks, out_file, entity=entity, doc_type=doc_type)
         else:
-            input_path = Path(f"app_input{Path(uploaded_file.name).suffix}")
-            input_path.write_bytes(uploaded_file.getvalue())
-            with st.spinner("Chunking and preparing data..."):
-                chunks = read_and_chunk_document(
-                    input_path,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    mode=pdf_mode,
-                    chunk_method=chunk_method,
-                    dedup=dedup,
-                    encoding_name=encoding,
-                )
-            st.success(f"Generated {len(chunks)} chunks.")
-            st.write(chunks[:5])
-            out_file = Path("app_data.jsonl")
-            if prep_mode == "pretrain":
-                make_pretrain_data(chunks, out_file, entity=entity, doc_type=doc_type)
-            else:
-                make_instruct_data(
-                    chunks,
-                    out_file,
-                    max_q=max_q,
-                    delay=delay,
-                    entity=entity,
-                    doc_type=doc_type,
-                )
-            st.success(f"Prepared data saved to {out_file}")
-            with open(out_file, "rb") as f:
-                st.download_button("📥 Download JSONL", f, file_name="app_data.jsonl")
-            st.session_state["data_path"] = str(out_file)
+            make_instruct_data(
+                chunks,
+                out_file,
+                max_q=max_q,
+                delay=delay,
+                entity=entity,
+                doc_type=doc_type,
+            )
+        st.success(f"Prepared data saved to {out_file}")
+        with open(out_file, "rb") as f:
+            st.download_button("📥 Download JSONL", f, file_name="app_data.jsonl")
+        st.session_state["data_path"] = str(out_file)
 
 # -- Sidebar: Training -------------------------------------
 if mode == "Train Model":
@@ -129,47 +131,48 @@ def load_chat_model(path, max_len):
     FastLanguageModel.for_inference(model)
     return model, tokenizer
 
-use_chat_api = hasattr(st, "chat_input") and hasattr(st, "chat_message")
-st.subheader("💬 Chat")
-st.markdown("Interact with your trained model.\n---")
+if mode == "Chat":
+    use_chat_api = hasattr(st, "chat_input") and hasattr(st, "chat_message")
+    st.subheader("💬 Chat")
+    st.markdown("Interact with your trained model.\n---")
 
-history = st.session_state.get("history", [])
-for usr, bot in history:
-    if use_chat_api:
-        st.chat_message("user").write(usr)
-        st.chat_message("assistant").write(bot)
-    else:
-        st.markdown(f"**You:** {usr}")
-        st.markdown(f"**Bot:** {bot}")
-
-if use_chat_api:
-    user_input = st.chat_input("Your message:")
-else:
-    user_input = st.text_input("Your message:")
-
-if user_input:
-    if not model_dir:
-        st.warning("Select a model directory in the sidebar first.")
-    else:
-        model, tokenizer = load_chat_model(model_dir, chunk_size)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        inputs = tokenizer.apply_chat_template(
-            [{"role": "user", "content": user_input}],
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-        ).to(device)
-        pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
-        outputs = model.generate(
-            inputs,
-            max_new_tokens=256,
-            pad_token_id=pad_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-        resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
-        history.append((user_input, resp))
-        st.session_state["history"] = history
+    history = st.session_state.get("history", [])
+    for usr, bot in history:
         if use_chat_api:
-            st.chat_message("assistant").write(resp)
+            st.chat_message("user").write(usr)
+            st.chat_message("assistant").write(bot)
         else:
-            st.markdown(f"**Bot:** {resp}")
+            st.markdown(f"**You:** {usr}")
+            st.markdown(f"**Bot:** {bot}")
+
+    if use_chat_api:
+        user_input = st.chat_input("Your message:")
+    else:
+        user_input = st.text_input("Your message:")
+
+    if user_input:
+        if not model_dir:
+            st.warning("Select a model directory in the sidebar first.")
+        else:
+            model, tokenizer = load_chat_model(model_dir, chunk_size)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            inputs = tokenizer.apply_chat_template(
+                [{"role": "user", "content": user_input}],
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            ).to(device)
+            pad_id = tokenizer.pad_token_id or tokenizer.eos_token_id
+            outputs = model.generate(
+                inputs,
+                max_new_tokens=256,
+                pad_token_id=pad_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+            resp = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+            history.append((user_input, resp))
+            st.session_state["history"] = history
+            if use_chat_api:
+                st.chat_message("assistant").write(resp)
+            else:
+                st.markdown(f"**Bot:** {resp}")
