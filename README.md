@@ -9,91 +9,75 @@ This repository provides a complete pipeline for fine-tuning and continually pre
 - ⚡️ Fast finetuning and inference using Unsloth's patched models
 - 🧾 Continual pretraining from scratch using `.txt` or `.jsonl`
 - 🤖 Instruction fine-tuning with multi-turn chat format
-- 🗂 Modular pipeline: `data_prep.py`, `train.py`, `inference.py`
+- 🗂 Modular pipeline (CLI): `scripts/prepare_data.py`, `scripts/finetune.py`, `scripts/chat_interface.py`, `scripts/finetune_shiji.py`
+- 🖥 GUI interface via Streamlit: `app.py`
 - 🧪 Test your custom model via terminal chatbot interface
 - ✅ Sample finetunes: Pirate Instruct, Zarnian Lore, CV domain expertise
 
 
-## 🗂 Project Structure
+## 📂 Project Structure
 
 ```
-llm_finetune/
-├── data/ # Preprocessed training datasets (.jsonl)
-├── docs/ # Raw source texts (.txt or PDFs)
-├── models/ # Saved LoRA weights
-├── scripts/
-│ ├── data_prep.py # Chunk, clean, and prepare training data
-│ ├── train.py # Run Unsloth-based pretraining or finetuning
-│ └── inference.py # Simple chatbot for inference
-├── requirements.txt
-└── README.md
+. (root)
+├── app.py                     # Streamlit GUI for data-prep, training & chat
+├── scripts/                  # CLI entrypoints
+│   ├── prepare_data.py       # Chunk & prepare pretrain/instruct data
+│   ├── finetune.py           # Supervised fine-tuning via SFTTrainer
+│   ├── chat_interface.py     # Terminal-based chat interface
+│   └── finetune_shiji.py     # Shiji dataset example pipeline
+├── src/                      # Importable Python package
+│   └── llm_finetune/
+│       ├── __init__.py
+│       ├── data_prep_tools.py
+│       └── finetune_tool.py
+├── notebooks/                # Jupyter notebooks
+├── data/                     # Prepared JSONL datasets
+├── docs/                     # Raw docs (.txt/.pdf) and guides
+├── models/                   # Saved LoRA weights
+├── outputs/                  # Checkpoints, logs (git-ignored)
+├── llama.cpp/                # llama.cpp artifacts (git-ignored)
+├── mac/                      # macOS build artifacts (git-ignored)
+└── unsloth_compiled_cache/   # Cache directory (git-ignored)
 ```
 
-## 📄 1. Preparing Your Data
+## 🚀 Getting Started
 
-**Supported formats:**
-
-- `.txt` for continual pretraining
-- `.jsonl` with chat format for instruction finetuning
-
-### Continual Pretraining
-
+### 1. Install Dependencies
 ```bash
-python data_prep.py \
+conda env create -f environment_core.yml
+conda activate unsloth3.11
+# or with pip: pip install -e .
+```
+
+### 2. Run the Streamlit GUI
+```bash
+export PYTHONPATH=src:$PYTHONPATH
+streamlit run app.py
+```
+
+### 3. Use the CLI
+```bash
+# 3.1 Prepare data
+python scripts/prepare_data.py \
   --input_file docs/zarnian_lore.txt \
-  --output_dir data/Zarnian/ \
-  --chunk_size 1500 \
-  --overlap 200 \
+  --output_dir data/Zarnian \
   --mode pretrain
+
+# 3.2 Fine-tune model
+python scripts/finetune.py \
+  --training_data_path data/Zarnian/pretrain.jsonl \
+  --model_name Zarnian \
+  --base_model unsloth/Llama-3.2-3B-Instruct-bnb-4bit \
+  --mode pretrain \
+  --epochs 3
+
+# 3.3 Chat in terminal
+python scripts/chat_interface.py \
+  --model_dir models/Zarnian
+
+# 3.4 Shiji example
+python scripts/finetune_shiji.py
 ```
-
-### Instruction Finetuning
-
-```bash
-python data_prep.py \
-  --input_file docs/pirate_chat.json \
-  --output_dir data/Pirate/ \
-  --mode instruct
-```
-
-## 🏋️‍♂️ 2. Training
-
-```
-python train.py \
-  --model_name unsloth/Llama-3.2-3B-Instruct-bnb-4bit \
-  --train_dataset data/Pirate/pretrain.jsonl \
-  --output_dir models/pirate_instruct \
-  --epochs 10 \
-  --max_seq_length 512
-```
-
-## 💬 3. Inference
-
-```bash
-python inference.py --model_dir models/pirate_instruct
-
-You: What is the meaning of life?
-Bot: Ah matey, 'tis to chase dreams, swig rum, and leave no treasure unclaimed!
-```
-
-
-## 📚 Examples
-
-- Zarnian Lore: A fictional world injected via continual pretraining
-- Pirate Instruct: Instruction-style chat finetune with pirate roleplay
-- Anthony CV: Finetune on domain expertise using extracted structured experience from a PDF
-
-## 🛠 Requirements
-- Python 3.11+
-- CUDA-enabled GPU recommended (8GB+)
-- transformers, unsloth, datasets, torch, pdfplumber
-- [TODO] Mac MLX-ML training
-
-## 📎 Notes
-
-- Uses Unsloth for native 4-bit loading and patched fast training
-- Avoid large chunk_size if dataset is small
-- Instruction-style fine-tune works best with chat-format .jsonl
 
 ## 📄 License
 This project is under the MIT License.
@@ -102,4 +86,3 @@ This project is under the MIT License.
 - Unsloth
 - HuggingFace Transformers
 - Anthony Sun
-- ChatGPT for this helpful README.md
