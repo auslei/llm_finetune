@@ -12,61 +12,68 @@ from llm_finetune.data_prep_tools import (
 from llm_finetune.finetune_tool import DocumentFineTune
 from unsloth import FastLanguageModel
 
-# -- Sidebar: Data Preparation ----------------------------
-st.sidebar.header("1. Data Preparation")
-uploaded_file = st.sidebar.file_uploader(
-    "Upload a .txt or .pdf file", type=["txt", "pdf"]
+# Page configuration and title
+st.set_page_config(
+    page_title="LLM Finetune Dashboard",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
-prep_mode = st.sidebar.selectbox("Mode", ["pretrain", "instruct"]);
-chunk_size = st.sidebar.number_input("Chunk size", value=1024, step=1)
-chunk_overlap = st.sidebar.number_input("Chunk overlap", value=200, step=1)
-pdf_mode = st.sidebar.selectbox("PDF mode", ["simple", "columns"])
-chunk_method = st.sidebar.selectbox("Chunk method", ["characters", "tokens"])
-dedup = st.sidebar.checkbox("Deduplicate chunks", value=True)
-encoding = st.sidebar.text_input("Encoding name", value="gpt2")
-entity = st.sidebar.text_input("Entity name", value="Unknown")
-doc_type = st.sidebar.text_input("Doc type", value="document")
-# instruct-only params
-max_q = st.sidebar.number_input("Max Q&A pairs", value=3, step=1)
-delay = st.sidebar.number_input("Delay (s)", value=0.5, step=0.1, format="%.2f")
+st.title("🤖 LLM Finetune & Chat Dashboard")
+st.markdown(
+    "Use the sidebar to prepare data, train models, or chat with a trained model."
+)
 
-if uploaded_file:
-    with open(f"app_input{Path(uploaded_file.name).suffix}", "wb") as f:
-        f.write(uploaded_file.read())
-    st.sidebar.success(f"File saved: {uploaded_file.name}")
-
-if st.sidebar.button("Prepare Data"):
-    if not uploaded_file:
-        st.sidebar.error("Please upload a file first.")
-    else:
-        input_path = Path(f"app_input{Path(uploaded_file.name).suffix}")
-        chunks = read_and_chunk_document(
-            input_path,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            mode=pdf_mode,
-            chunk_method=chunk_method,
-            dedup=dedup,
-            encoding_name=encoding,
-        )
-        st.success(f"Generated {len(chunks)} chunks.")
-        st.write(chunks[:5])
-        out_file = Path("app_data.jsonl")
-        if prep_mode == "pretrain":
-            make_pretrain_data(chunks, out_file, entity=entity, doc_type=doc_type)
+# Sidebar controls grouped in expanders and forms
+with st.sidebar.expander("1️⃣ Data Preparation", expanded=True):
+    with st.form(key="prep_form", clear_on_submit=False):
+        uploaded_file = st.file_uploader("Upload .txt or .pdf file", type=["txt", "pdf"])
+        prep_mode = st.selectbox("Mode", ["pretrain", "instruct"]);
+        chunk_size = st.number_input("Chunk size", value=1024, step=1)
+        chunk_overlap = st.number_input("Chunk overlap", value=200, step=1)
+        pdf_mode = st.selectbox("PDF mode", ["simple", "columns"])
+        chunk_method = st.selectbox("Chunk method", ["characters", "tokens"])
+        dedup = st.checkbox("Deduplicate chunks", value=True)
+        encoding = st.text_input("Encoding name", value="gpt2")
+        entity = st.text_input("Entity name", value="Unknown")
+        doc_type = st.text_input("Doc type", value="document")
+        max_q = st.number_input("Max Q&A pairs", value=3, step=1)
+        delay = st.number_input("Delay (s)", value=0.5, step=0.1, format="%.2f")
+        prep_submit = st.form_submit_button(label="Prepare Data")
+    if prep_submit:
+        if not uploaded_file:
+            st.error("Please upload a file first.")
         else:
-            make_instruct_data(
-                chunks,
-                out_file,
-                max_q=max_q,
-                delay=delay,
-                entity=entity,
-                doc_type=doc_type,
-            )
-        st.success(f"Prepared data saved to {out_file}")
-        with open(out_file, "rb") as f:
-            st.download_button("Download JSONL", f, file_name="app_data.jsonl")
-        st.session_state["data_path"] = str(out_file)
+            input_path = Path(f"app_input{Path(uploaded_file.name).suffix}")
+            input_path.write_bytes(uploaded_file.getvalue())
+            with st.spinner("Chunking and preparing data..."):
+                chunks = read_and_chunk_document(
+                    input_path,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    mode=pdf_mode,
+                    chunk_method=chunk_method,
+                    dedup=dedup,
+                    encoding_name=encoding,
+                )
+            st.success(f"Generated {len(chunks)} chunks.")
+            st.write(chunks[:5])
+            out_file = Path("app_data.jsonl")
+            if prep_mode == "pretrain":
+                make_pretrain_data(chunks, out_file, entity=entity, doc_type=doc_type)
+            else:
+                make_instruct_data(
+                    chunks,
+                    out_file,
+                    max_q=max_q,
+                    delay=delay,
+                    entity=entity,
+                    doc_type=doc_type,
+                )
+            st.success(f"Prepared data saved to {out_file}")
+            with open(out_file, "rb") as f:
+                st.download_button("📥 Download JSONL", f, file_name="app_data.jsonl")
+            st.session_state["data_path"] = str(out_file)
 
 # -- Sidebar: Training -------------------------------------
 st.sidebar.header("2. Train Model")
