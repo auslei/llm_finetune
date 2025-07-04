@@ -1,15 +1,18 @@
+from sympy import false
 from unsloth import FastLanguageModel
 import torch
 from pathlib import Path
 import logging
 import sys
 
+from transformers.utils import logging as tlogging
+tlogging.set_verbosity_error()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def run_chatbot_inference(lora_weights_path: Path, max_seq_length: int = 512):
+def run_chatbot_inference(lora_weights_path: str, max_seq_length: int = 512):
     logger.info(f"Loading LoRA model from: {lora_weights_path}...")
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
@@ -53,10 +56,11 @@ def run_chatbot_inference(lora_weights_path: Path, max_seq_length: int = 512):
                 max_new_tokens=256,
                 use_cache=True,
                 do_sample=True,
-                temperature=0.9,
-                top_p=0.95,
+                temperature=0.7,
+                top_p=0.9,
                 repetition_penalty=1.2,
                 pad_token_id=pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
             )
 
             response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
@@ -71,12 +75,22 @@ def run_chatbot_inference(lora_weights_path: Path, max_seq_length: int = 512):
             continue
 
 if __name__ == "__main__":
-    MODEL_NAME = "zarnian"
+    MODEL_NAME = "anthony"
+    MODEL_NAME = "pirate"
+    #MODEL_NAME = "Zarnian"
+    BASE_MODEL = False
+
     MAX_SEQ_LENGTH = 512
     LORA_WEIGHTS_LOCATION = Path(f"models/{MODEL_NAME}")
+    BASE_MODEL_PATH = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
 
-    if not LORA_WEIGHTS_LOCATION.exists():
-        logger.error(f"LoRA weights not found at {LORA_WEIGHTS_LOCATION}.")
-        sys.exit(1)
 
-    run_chatbot_inference(LORA_WEIGHTS_LOCATION, MAX_SEQ_LENGTH)
+    if not BASE_MODEL:
+        model_name = str(LORA_WEIGHTS_LOCATION)
+        if not LORA_WEIGHTS_LOCATION.exists():
+            logger.error(f"LoRA weights not found at {LORA_WEIGHTS_LOCATION}.")
+            sys.exit(1)
+    else:
+        model_name = BASE_MODEL_PATH
+
+    run_chatbot_inference(model_name, MAX_SEQ_LENGTH)

@@ -87,7 +87,8 @@ def chunk_text_by_characters(
 
 def add_identity(text: str, entity: str, doc_type: str) -> str:
     """Prepend identity information to a paragraph."""
-    return f"This paragraph is from the {doc_type} of {entity}.\n\n{text.strip()}"
+    #return f"This paragraph is from the {doc_type} of {entity}.\n\n{text.strip()}"
+    return f"[ENTITY: {entity}] [TYPE: {doc_type}]\n\n{text.strip()}"
 
 
 def save_json_dataset(records: Union[List[dict], Dataset], path: Union[str, Path]) -> dict:
@@ -173,16 +174,17 @@ def make_instruct_data(
 
 if __name__ == "__main__":
 
-    INPUT_DOC = "docs/zarnian_lore_new.txt"
-    ENTITY = "Zarnian"
+    INPUT_DOC = "docs/zarnian_lore.txt"
+    MODEL = "Zarnian"
+    ENTITY = "Oracle Veyra"
     DOC_TYPE = "Zarnian Lore"
     OLLAMA_MODEL = "mistral"
 
-    DATA_PATH = Path(f"data/{ENTITY}")
+    DATA_PATH = Path(f"data/{MODEL}")
     DATA_PATH.mkdir(parents=True, exist_ok=True)
 
-    TEXT_CHUNK_SIZE = 1024
-    TEXT_CHUNK_OVERLAP = 200
+    TEXT_CHUNK_SIZE = 640
+    TEXT_CHUNK_OVERLAP = 100
 
     logger.info(f"Reading and chunking document: {INPUT_DOC}")
     chunks = read_and_chunk_document(

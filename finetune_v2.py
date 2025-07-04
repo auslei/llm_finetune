@@ -12,6 +12,7 @@ from trl import SFTConfig, SFTTrainer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 # Compatibility patch for torch version checks used in Unsloth
 # This helps Unsloth correctly identify PyTorch versions in some environments.
 def is_torch_version(op, ver):
@@ -64,9 +65,16 @@ class DocumentFineTune:
         using Unsloth's optimized methods.
         """
         logger.info(f"✅ Loading model: {self.base_model_path}...")
+
+        model_path = self.base_model_path
+
+        if self.model_lora_weights_location.exists():   
+            logger.info(f"Previous training exists, loading the model from {self.model_lora_weights_location} instead")
+            model_path = self.model_lora_weights_location
+        
         # Load the base model and tokenizer from HuggingFace
         self.model, self.tokenizer = FastLanguageModel.from_pretrained(
-            model_name=self.base_model_path,
+            model_name=str(model_path),
             max_seq_length=self.max_seq_length,
             dtype=torch.float16, # Use float16 for faster training and less memory
             load_in_4bit=True, # Load in 4-bit quantization for memory efficiency
@@ -199,7 +207,7 @@ class DocumentFineTune:
             logger.info(f"Validation dataset size: {len(self.val_dataset)}")
 
 
-    def train(self):
+    def train(self, num_train_epochs = 2):
         """
         Initiates the fine-tuning process using the SFTTrainer from TRL.
         """
@@ -213,7 +221,7 @@ class DocumentFineTune:
             per_device_train_batch_size=2, # Batch size per GPU
             gradient_accumulation_steps=4, # Accumulate gradients over N steps
             learning_rate=2e-5, # Initial learning rate
-            num_train_epochs=30, # Number of training epochs
+            num_train_epochs=num_train_epochs, # Number of training epochs
             warmup_steps=10, # Number of warmup steps for learning rate scheduler
             logging_steps=10, # Log training progress every N steps
             optim="adamw_8bit", # Optimizer to use (8-bit AdamW for memory efficiency)
@@ -277,15 +285,19 @@ class DocumentFineTune:
 # Example Usage (consider wrapping this in a main block if this is a script)
 if __name__ == "__main__":
     # Define your training parameters
-    TRAINING_DATA_PATH = "data/pirate/pirate_pretrain_strong.jsonl" # Path to your JSONL file or directory
-    TRAINING_DATA_PATH = "data/pirate/pirate_instruct.jsonl" # Path to your JSONL file or directory
+    #TRAINING_DATA_PATH = "data/pirate/pirate_pretrain_strong.jsonl" # Path to your JSONL file or directory
+    #TRAINING_DATA_PATH = "data/pirate/pirate_instruct.jsonl" # Path to your JSONL file or directory
     TRAINING_DATA_PATH = "data/Zarnian/pretrain.jsonl" # Path to your JSONL file or directory
-    MODEL_NAME = "zarnian"
+    #TRAINING_DATA_PATH = "data/anthony/pretrain.jsonl" # Path to your JSONL file or directory
+    #MODEL_NAME = "anthony"
+    #MODEL_NAME = "pirate"
+    MODEL_NAME = "Zarnian"
     BASE_MODEL = "unsloth/llama-3-8b-bnb-4bit" # Or "unsloth/mistral-7b-bnb-4bit"
     BASE_MODEL = "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
     MAX_SEQ_LENGTH = 512 # Adjust based on your data and GPU memory
     TRAINING_MODE = "pretrain" # "pretrain" for long documents, "instruct" for Q&A/chat
 
+    NUM_OF_EPOCHS = 50
     try:
         fine_tuner = DocumentFineTune(
             training_data_path=TRAINING_DATA_PATH,
@@ -295,7 +307,7 @@ if __name__ == "__main__":
             training_mode=TRAINING_MODE
         )
 
-        fine_tuner.train()
+        fine_tuner.train(num_train_epochs=NUM_OF_EPOCHS)
 
         # If you want to convert to GGUF after training
         # fine_tuner.save_gguf()
