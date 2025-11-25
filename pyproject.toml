@@ -1,0 +1,56 @@
+[project]
+name = "llm-finetune"
+version = "0.1.0"
+description = "LLM Finetuning environment"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "unsloth",
+    "ollama",
+    "jupyter",
+    "pdfplumber",
+    "pymupdf4llm",
+    "dataset>=1.6.2",
+    "tiktoken>=0.12.0",
+    "langchain>=1.1.0",
+    "langchain-text-splitters>=1.0.0",
+    "nltk>=3.9.2",
+    "pdf2image>=1.17.0",
+    "python-dotenv>=1.0.0",
+    "rich>=14.2.0",
+    "tqdm>=4.67.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["llm_finetune*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Markers for categorizing tests
+markers = [
+    "unit: Unit tests that don't require external services",
+    "integration: Integration tests that may require mocked external services",
+    "slow: Tests that take a long time to run",
+]
+
+# Test output options
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+
+[tool.uv]

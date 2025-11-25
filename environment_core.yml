@@ -1,6 +1,7 @@
 name: unsloth3.11
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.11
   - unsloth

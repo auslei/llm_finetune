@@ -207,3 +207,99 @@ class DocumentFineTune:
         )
         self.tokenizer.save_pretrained(self.model_lora_weights_location)
         logger.info("✅ Model successfully saved in GGUF format.")
+        
+        
+class UniversalFineTuner:
+    def __init__(
+        self, 
+        training_data_path: str, 
+        model_name: str = "unsloth/Qwen2.5-1.5B-Instruct", 
+        mode: str = "instruct"  # "instruct" or "pretrain"
+    ):
+        self.mode = mode
+        self.training_data_path = training_data_path
+        self.base_model_name = model_name
+        
+        # 1. Dynamic Target Modules
+        # CPT needs to train embeddings to learn new domain terms. SFT does not.
+        if self.mode == "pretrain":
+            self.target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", 
+                                   "gate_proj", "up_proj", "down_proj", 
+                                   "embed_tokens", "lm_head"] # <--- Added for CPT
+        else:
+            self.target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", 
+                                   "gate_proj", "up_proj", "down_proj"]
+
+        # 2. Load Model
+        self.model, self.tokenizer = FastLanguageModel.from_pretrained(
+            model_name = self.base_model_name,
+            max_seq_length = 2048,
+            dtype = None,
+            load_in_4bit = True,
+        )
+
+        # 3. Add LoRA
+        self.model = FastLanguageModel.get_peft_model(
+            self.model,
+            r = 64 if mode == "instruct" else 128, # Higher rank for CPT (more knowledge to absorb)
+            target_modules = self.target_modules,
+            lora_alpha = 32,
+            lora_dropout = 0,
+            bias = "none",
+            use_gradient_checkpointing = "unsloth",
+            random_state = 3407,
+        )
+
+    def train(self):
+        # Load Data
+        dataset = load_dataset("json", data_files={"train": self.training_data_path}, split="train")
+
+        # 4. Configure Trainer based on Mode
+        if self.mode == "instruct":
+            # INSTRUCT MODE: Uses your formatting function & NO packing
+            packing = False
+            dataset_text_field = None
+            formatting_func = self._format_instruct_prompts # Defined below
+            learning_rate = 2e-4
+        else:
+            # PRETRAIN MODE: Raw text packing & simple text field
+            packing = True
+            dataset_text_field = "text" # The column we created in generate_universal_dataset
+            formatting_func = None
+            learning_rate = 5e-5 # Lower LR for CPT is usually safer
+
+        trainer = SFTTrainer(
+            model = self.model,
+            tokenizer = self.tokenizer,
+            train_dataset = dataset,
+            dataset_text_field = dataset_text_field,
+            formatting_func = formatting_func,
+            max_seq_length = 2048,
+            dataset_num_proc = 1,
+            packing = packing, # <--- The Magic Switch
+            args = SFTConfig(
+                output_dir = "outputs",
+                per_device_train_batch_size = 1 if self.mode=="instruct" else 2,
+                gradient_accumulation_steps = 4,
+                num_train_epochs = 3,
+                learning_rate = learning_rate,
+                max_seq_length = 2048,
+                fp16 = not torch.cuda.is_bf16_supported(),
+                bf16 = torch.cuda.is_bf16_supported(),
+                logging_steps = 10,
+                optim = "adamw_8bit",
+                seed = 3407,
+            ),
+        )
+        
+        trainer.train()
+        self.model.save_pretrained(f"models/{self.mode}_model")
+        self.tokenizer.save_pretrained(f"models/{self.mode}_model")
+
+    def _format_instruct_prompts(self, examples):
+        # Your standard Alpaca/Chat formatter
+        texts = []
+        for instr, inp, out in zip(examples["instruction"], examples["input"], examples["output"]):
+            text = f"Instruction:\n{instr}\n\nInput:\n{inp}\n\nResponse:\n{out}<|endoftext|>"
+            texts.append(text)
+        return texts
