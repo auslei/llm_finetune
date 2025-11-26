@@ -1,0 +1,70 @@
+# Example configurations for FineTuner.
+# Copy the block you need (instruct or pretrain) and adjust paths/values.
+
+# --- Recommended: Instruct / SFT ---
+mode: instruct
+training_data_path: data/medical_o1_reasoning.jsonl
+val_split: 0.1            # set to 0 to disable auto split when no test.jsonl is present
+
+# Models and locations
+base_model: "unsloth/Qwen2.5-1.5B-Instruct"
+resume_from_lora: null    # Optional existing LoRA directory to resume/continue
+model_name: medical_reasoning_example
+checkpoints_dir: checkpoints
+output_dir: models
+max_seq_length: 2048
+load_in_4bit: true
+
+# Training hyperparameters (SFT defaults shown)
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 2
+learning_rate: 0.0002
+num_train_epochs: 3
+logging_steps: 10
+optim: adamw_8bit
+seed: 3407
+
+# LoRA / PEFT (SFT defaults)
+lora_rank: 64
+lora_alpha: 32
+lora_dropout: 0.0
+use_gradient_checkpointing: unsloth
+
+# Export
+save_gguf: false
+quantization_method: q4_k_m
+
+---
+
+# --- Recommended: Pretrain / CPT ---
+mode: pretrain
+training_data_path: data/your_pretrain_corpus.jsonl
+val_split: 0.0            # typically disabled for large pretrain corpora
+
+# Models and locations
+base_model: "unsloth/Qwen2.5-1.5B-Instruct"
+resume_from_lora: null
+model_name: domain_cpt_example
+checkpoints_dir: checkpoints
+output_dir: models
+max_seq_length: 2048
+load_in_4bit: true
+
+# Training hyperparameters (CPT defaults shown)
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 0.00005
+num_train_epochs: 1
+logging_steps: 10
+optim: adamw_8bit
+seed: 3407
+
+# LoRA / PEFT (CPT defaults)
+lora_rank: 128
+lora_alpha: 32
+lora_dropout: 0.0
+use_gradient_checkpointing: true
+
+# Export
+save_gguf: false
+quantization_method: q4_k_m

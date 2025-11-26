@@ -53,4 +53,5 @@ addopts = [
     "--tb=short",
 ]
 
-[tool.uv]
+[project.scripts]
+tuner = "llm_finetune.cli:main"

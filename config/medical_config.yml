@@ -1,0 +1,32 @@
+# Medical instruct fine-tuning example
+mode: instruct
+training_data_path: data/medical_o1_reasoning.jsonl
+val_split: 0.1
+
+# Models and locations
+base_model: "unsloth/Qwen2.5-1.5B-Instruct"
+resume_from_lora: null
+model_name: medical_reasoning_clinical
+checkpoints_dir: checkpoints
+output_dir: models
+max_seq_length: 1024
+load_in_4bit: true
+
+# Training hyperparameters optimized for 12GB VRAM (RTX 4070 Super)
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 0.0002
+num_train_epochs: 3
+logging_steps: 10
+optim: adamw_8bit
+seed: 3407
+
+# LoRA / PEFT - reduced rank for memory efficiency
+lora_rank: 32
+lora_alpha: 32
+lora_dropout: 0.0
+use_gradient_checkpointing: unsloth
+
+# Export
+save_gguf: false
+quantization_method: q4_k_m
