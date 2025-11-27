@@ -3,7 +3,7 @@
 
 # --- Recommended: Instruct / SFT ---
 mode: instruct
-training_data_path: data/medical_o1_reasoning.jsonl
+training_data_path: data/medical_o1_reasoning.jsonl.gz
 val_split: 0.1            # set to 0 to disable auto split when no test.jsonl is present
 
 # Models and locations

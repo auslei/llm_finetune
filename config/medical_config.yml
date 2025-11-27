@@ -1,6 +1,6 @@
 # Medical instruct fine-tuning example
 mode: instruct
-training_data_path: data/medical_o1_reasoning.jsonl
+training_data_path: data/medical_o1_reasoning.jsonl.gz
 val_split: 0.1
 
 # Models and locations

@@ -29,5 +29,5 @@ def format_to_detective(row):
 if __name__ == "__main__":
     config_path = os.environ.get("FINETUNE_CONFIG", "config/finetune.example.yaml")
     tuner = FineTuner(config_path)
-    tuner._load_training_data("data/medical_o1_reasoning.jsonl")
+    tuner._load_training_data("data/medical_o1_reasoning.jsonl.gz")
     tuner.train()

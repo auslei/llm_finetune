@@ -96,10 +96,19 @@ class FineTuner:
             files = {"train": str(train_file)}
             if test_file.exists():
                 files["test"] = str(test_file)
-        elif path.is_file() and path.suffix == ".jsonl":
-            files = {"train": str(path)}
+        elif path.is_file():
+            suffixes = path.suffixes
+            is_jsonl = path.suffix == ".jsonl"
+            is_jsonl_gz = len(suffixes) >= 2 and suffixes[-2:] == [".jsonl", ".gz"]
+
+            if is_jsonl or is_jsonl_gz:
+                files = {"train": str(path)}
+            else:
+                raise ValueError(
+                    f"Invalid training_data_path: {path}. Must be directory or .jsonl/.jsonl.gz file."
+                )
         else:
-            raise ValueError(f"Invalid training_data_path: {path}. Must be directory or .jsonl file.")
+            raise ValueError(f"Invalid training_data_path: {path}. Must be directory or .jsonl/.jsonl.gz file.")
 
         dataset = load_dataset("json", data_files=files)
 
