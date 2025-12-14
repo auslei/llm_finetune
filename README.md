@@ -9,6 +9,8 @@ This repository provides a complete pipeline for fine-tuning and continually pre
 - ⚡️ Fast finetuning and inference using Unsloth's patched models
 - 🧾 Continual pretraining from scratch using `.txt` or `.jsonl`
 - 🤖 Instruction fine-tuning with multi-turn chat format
+- 💾 Memory-optimized dataset loading with streaming mode for large datasets
+- 📦 Batched tokenization to prevent memory spikes
 - 🗂 Modular pipeline (CLI): `scripts/prepare_data.py`, `scripts/finetune.py`, `scripts/chat_interface.py`, `scripts/finetune_shiji.py`
 - 🖥 GUI interface via Streamlit: `app.py`
 - 🧪 Test your custom model via terminal chatbot interface
@@ -78,6 +80,53 @@ python scripts/chat_interface.py \
 # 3.4 Shiji example
 python scripts/finetune_shiji.py
 ```
+
+## 💾 Memory Optimization
+
+For large datasets that don't fit in memory, enable streaming mode to load data incrementally:
+
+### Using Streaming Mode (Python API)
+```python
+from llm_finetune.finetune_tool import FineTuner
+
+tuner = FineTuner(
+    training_data_path="data/large_dataset.jsonl",
+    model_name="MyModel",
+    base_model="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
+    mode="pretrain",
+    streaming=True  # Enable streaming mode
+)
+tuner.train()
+```
+
+### Using Configuration File
+Create a YAML config file with streaming enabled:
+```yaml
+training_data_path: "data/large_dataset.jsonl"
+mode: "pretrain"
+base_model: "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
+model_name: "MyModel"
+streaming: true
+dataset_batch_size: 1000  # Optional: adjust based on available memory (default: 1000)
+num_train_epochs: 3
+```
+
+Then run:
+```bash
+python -m llm_finetune.cli --config config.yaml
+```
+
+### Memory Optimization Features
+- **Streaming Mode**: Loads data incrementally instead of loading entire dataset into memory
+- **Batched Tokenization**: Processes data in configurable batches (default: 1000 samples) to prevent memory spikes
+- **Column Removal**: Automatically removes unused columns during preprocessing to reduce memory footprint
+- **Efficient Validation**: Uses minimal sampling for dataset validation
+- **Configurable Batch Size**: Adjust `dataset_batch_size` parameter to optimize for your available memory
+
+### Important Notes
+- When using streaming mode, automatic train/test splitting is disabled. Provide separate train and test files if validation is needed.
+- Streaming datasets don't report total size until consumed.
+- For datasets under 1GB, traditional loading may be faster.
 
 ## 📄 License
 This project is under the MIT License.

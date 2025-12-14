@@ -33,7 +33,14 @@ def _ensure_torch_version_patch() -> None:
 
 
 class FineTuner:
-    """Unified fine-tuner supporting both SFT (instruct) and CPT (pretrain) modes."""
+    """
+    Unified fine-tuner supporting both SFT (instruct) and CPT (pretrain) modes.
+    
+    Memory Optimization Features:
+    - Supports streaming mode for incremental dataset loading (set streaming=True in config)
+    - Batched tokenization with configurable batch sizes to reduce memory spikes
+    - Efficient data processing pipeline to minimize memory footprint
+    """
 
     def __init__(self, config: FineTuneConfig | Mapping[str, Any] | str | None = None, **overrides: Any) -> None:
         _ensure_torch_version_patch()
@@ -85,6 +92,13 @@ class FineTuner:
         logger.info("✅ Model loaded and LoRA applied.")
 
     def _load_training_data(self) -> None:
+        """
+        Load training data from JSONL files.
+        
+        Supports both traditional (in-memory) and streaming modes:
+        - Traditional mode: Loads entire dataset into memory, supports train/test splitting
+        - Streaming mode: Loads data incrementally, reduces memory usage, requires pre-split files
+        """
         logger.info("✅ Loading training data for mode: %s", self.config.mode)
 
         path = Path(self.config.training_data_path)
@@ -110,23 +124,45 @@ class FineTuner:
         else:
             raise ValueError(f"Invalid training_data_path: {path}. Must be directory or .jsonl/.jsonl.gz file.")
 
-        dataset = load_dataset("json", data_files=files)
+        # Enable streaming mode to reduce memory consumption
+        dataset = load_dataset("json", data_files=files, streaming=self.config.streaming)
 
         if self.config.mode == "instruct":
             ds_train = dataset["train"]
+            # Handle train/test split based on streaming mode
             if "test" not in dataset and self.config.val_split > 0:
-                split = ds_train.train_test_split(test_size=self.config.val_split, seed=self.config.seed)
-                self.train_dataset = split["train"]
-                self.val_dataset = split["test"]
+                if self.config.streaming:
+                    # For streaming datasets, skip auto-splitting and use provided test set only
+                    logger.warning(
+                        "Streaming mode enabled: auto-splitting not supported. "
+                        "Validation split disabled unless test file is provided."
+                    )
+                    self.train_dataset = ds_train
+                    self.val_dataset = None
+                else:
+                    split = ds_train.train_test_split(test_size=self.config.val_split, seed=self.config.seed)
+                    self.train_dataset = split["train"]
+                    self.val_dataset = split["test"]
             else:
                 self.train_dataset = dataset["train"]
                 self.val_dataset = dataset.get("test")
 
             if "conversations" in self.train_dataset.column_names:
                 self._validate_conversation_data(self.train_dataset)
-                self.train_dataset = self.train_dataset.map(self._format_chat_conversation, batched=True)
+                # Use batched processing with configurable batch_size to reduce memory spikes
+                self.train_dataset = self.train_dataset.map(
+                    self._format_chat_conversation, 
+                    batched=True,
+                    batch_size=self.config.dataset_batch_size,
+                    remove_columns=["conversations"]
+                )
                 if self.val_dataset:
-                    self.val_dataset = self.val_dataset.map(self._format_chat_conversation, batched=True)
+                    self.val_dataset = self.val_dataset.map(
+                        self._format_chat_conversation, 
+                        batched=True,
+                        batch_size=self.config.dataset_batch_size,
+                        remove_columns=["conversations"]
+                    )
                 self._dataset_uses_text_field = True
             elif "text" in self.train_dataset.column_names:
                 self._validate_text_data(self.train_dataset)
@@ -140,11 +176,15 @@ class FineTuner:
             self._dataset_uses_text_field = True
             self._validate_text_data(self.train_dataset)
 
-        logger.info(
-            "✅ Data loaded. Train size: %s, Val size: %s",
-            len(self.train_dataset),
-            len(self.val_dataset) if self.val_dataset else 0,
-        )
+        # Handle logging for streaming vs non-streaming datasets
+        if self.config.streaming:
+            logger.info("✅ Data loaded in streaming mode (size: unknown until consumed)")
+        else:
+            logger.info(
+                "✅ Data loaded. Train size: %s, Val size: %s",
+                len(self.train_dataset),
+                len(self.val_dataset) if self.val_dataset else 0,
+            )
 
     def train(self, num_train_epochs: Optional[int] = None) -> None:
         """Train the model using SFTTrainer with mode-aware config."""
@@ -230,9 +270,17 @@ class FineTuner:
         missing = [c for c in ("instruction", "input", "output") if c not in dataset.column_names]
         if missing:
             raise ValueError(f"Instruct mode expects columns instruction/input/output, missing: {missing}")
-        if len(dataset) == 0:
-            raise ValueError("Training dataset is empty.")
-        sample = dataset.select(range(min(5, len(dataset))))
+        
+        # For streaming datasets, skip length check and use take() instead of select()
+        if self.config.streaming:
+            sample = list(dataset.take(5))
+            if not sample:
+                raise ValueError("Training dataset is empty.")
+        else:
+            if len(dataset) == 0:
+                raise ValueError("Training dataset is empty.")
+            sample = dataset.select(range(min(5, len(dataset))))
+        
         for row in sample:
             if not str(row.get("instruction", "")).strip() or not str(row.get("output", "")).strip():
                 raise ValueError("Instruct rows must have non-empty 'instruction' and 'output' values.")
@@ -240,9 +288,17 @@ class FineTuner:
     def _validate_text_data(self, dataset: Any) -> None:
         if "text" not in dataset.column_names:
             raise ValueError("Pretrain mode expects a 'text' column.")
-        if len(dataset) == 0:
-            raise ValueError("Training dataset is empty.")
-        sample = dataset.select(range(min(5, len(dataset))))
+        
+        # For streaming datasets, skip length check and use take() instead of select()
+        if self.config.streaming:
+            sample = list(dataset.take(5))
+            if not sample:
+                raise ValueError("Training dataset is empty.")
+        else:
+            if len(dataset) == 0:
+                raise ValueError("Training dataset is empty.")
+            sample = dataset.select(range(min(5, len(dataset))))
+        
         for row in sample:
             if not str(row.get("text", "")).strip():
                 raise ValueError("Text rows must have non-empty 'text' values.")
@@ -250,9 +306,17 @@ class FineTuner:
     def _validate_conversation_data(self, dataset: Any) -> None:
         if "conversations" not in dataset.column_names:
             raise ValueError("Chat-style datasets must include a 'conversations' column.")
-        if len(dataset) == 0:
-            raise ValueError("Training dataset is empty.")
-        sample = dataset.select(range(min(3, len(dataset))))
+        
+        # For streaming datasets, skip length check and use take() instead of select()
+        if self.config.streaming:
+            sample = list(dataset.take(3))
+            if not sample:
+                raise ValueError("Training dataset is empty.")
+        else:
+            if len(dataset) == 0:
+                raise ValueError("Training dataset is empty.")
+            sample = dataset.select(range(min(3, len(dataset))))
+        
         for row in sample:
             conv = row.get("conversations", [])
             if not isinstance(conv, list) or not conv:

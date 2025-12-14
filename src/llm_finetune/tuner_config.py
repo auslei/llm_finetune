@@ -34,10 +34,12 @@ class FineTuneConfig:
     use_gradient_checkpointing: Optional[Any] = None
     packing: Optional[bool] = None
     dataset_text_field: Optional[str] = None
+    dataset_batch_size: int = 1000  # Batch size for dataset processing operations
     val_split: float = 0.1
     load_in_4bit: bool = True
     save_gguf: bool = False
     quantization_method: str = "q4_k_m"
+    streaming: bool = False  # Enable streaming mode to reduce memory usage
     extra_kwargs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
