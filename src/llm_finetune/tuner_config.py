@@ -38,6 +38,7 @@ class FineTuneConfig:
     load_in_4bit: bool = True
     save_gguf: bool = False
     quantization_method: str = "q4_k_m"
+    streaming: bool = False  # Enable streaming mode to reduce memory usage
     extra_kwargs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
