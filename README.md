@@ -107,6 +107,7 @@ mode: "pretrain"
 base_model: "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"
 model_name: "MyModel"
 streaming: true
+dataset_batch_size: 1000  # Optional: adjust based on available memory (default: 1000)
 num_train_epochs: 3
 ```
 
@@ -117,9 +118,10 @@ python -m llm_finetune.cli --config config.yaml
 
 ### Memory Optimization Features
 - **Streaming Mode**: Loads data incrementally instead of loading entire dataset into memory
-- **Batched Tokenization**: Processes data in batches of 1000 samples to prevent memory spikes
+- **Batched Tokenization**: Processes data in configurable batches (default: 1000 samples) to prevent memory spikes
 - **Column Removal**: Automatically removes unused columns during preprocessing to reduce memory footprint
 - **Efficient Validation**: Uses minimal sampling for dataset validation
+- **Configurable Batch Size**: Adjust `dataset_batch_size` parameter to optimize for your available memory
 
 ### Important Notes
 - When using streaming mode, automatic train/test splitting is disabled. Provide separate train and test files if validation is needed.

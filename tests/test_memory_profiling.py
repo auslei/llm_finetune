@@ -27,9 +27,9 @@ def large_dataset(tmp_path):
     """Create a larger dataset for memory testing."""
     data_file = tmp_path / "large_train.jsonl"
     
-    # Generate ~1000 samples with longer text
+    # Generate ~500 samples with longer text (reduced from 1000 for faster tests)
     samples = []
-    for i in range(1000):
+    for i in range(500):
         sample = {
             "text": f"Sample {i}: " + "This is a longer text sample for memory testing. " * 20
         }
@@ -64,7 +64,7 @@ class TestMemoryProfiling:
         # Test 1: Non-streaming mode
         mock_dataset_non_streaming = MagicMock()
         mock_dataset_non_streaming.column_names = ["text"]
-        mock_dataset_non_streaming.__len__.return_value = 1000
+        mock_dataset_non_streaming.__len__.return_value = 500
         mock_dataset_non_streaming.select.return_value = [{"text": "sample"}] * 5
         
         mock_ds_dict = {"train": mock_dataset_non_streaming}
@@ -185,6 +185,71 @@ class TestMemoryProfiling:
         print(f"\nBatched Processing Configuration:")
         print(f"Batched: {call.get('batched')}")
         print(f"Batch size: {call.get('batch_size')}")
+    
+    @patch('src.llm_finetune.finetune_tool.FastLanguageModel')
+    @patch('src.llm_finetune.finetune_tool.load_dataset')
+    def test_custom_batch_size_configuration(self, mock_load_dataset, mock_model, tmp_path):
+        """Verify that custom batch size can be configured."""
+        # Create test data with conversations
+        data_file = tmp_path / "train.jsonl"
+        conversations_data = [
+            {
+                "conversations": [
+                    {"role": "user", "content": f"Question {i}"},
+                    {"role": "assistant", "content": f"Answer {i}"}
+                ]
+            }
+            for i in range(50)
+        ]
+        
+        with open(data_file, "w") as f:
+            for item in conversations_data:
+                f.write(json.dumps(item) + "\n")
+        
+        # Mock dataset
+        mock_dataset = MagicMock()
+        mock_dataset.column_names = ["conversations"]
+        mock_dataset.take.return_value = conversations_data[:3]
+        
+        # Track map calls
+        map_calls = []
+        def mock_map(*args, **kwargs):
+            map_calls.append(kwargs)
+            result = MagicMock()
+            result.column_names = ["text"]
+            return result
+        mock_dataset.map = mock_map
+        
+        mock_ds_dict = {"train": mock_dataset}
+        mock_load_dataset.return_value = mock_ds_dict
+        
+        # Mock model and tokenizer
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.apply_chat_template.return_value = "formatted"
+        mock_model.from_pretrained.return_value = (MagicMock(), mock_tokenizer)
+        mock_model.get_peft_model.return_value = MagicMock()
+        
+        # Create config with custom batch size
+        custom_batch_size = 500
+        config = FineTuneConfig(
+            training_data_path=str(data_file),
+            mode="instruct",
+            streaming=True,
+            dataset_batch_size=custom_batch_size
+        )
+        
+        tuner = FineTuner(config)
+        tuner._load_model()
+        tuner._load_training_data()
+        
+        # Verify custom batch size is used
+        assert len(map_calls) > 0
+        call = map_calls[0]
+        assert call.get("batch_size") == custom_batch_size, f"Batch size should be {custom_batch_size}"
+        
+        print(f"\nCustom Batch Size Configuration:")
+        print(f"Configured batch size: {custom_batch_size}")
+        print(f"Actual batch size: {call.get('batch_size')}")
 
 
 @pytest.mark.integration

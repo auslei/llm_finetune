@@ -149,18 +149,18 @@ class FineTuner:
 
             if "conversations" in self.train_dataset.column_names:
                 self._validate_conversation_data(self.train_dataset)
-                # Use batched processing with explicit batch_size to reduce memory spikes
+                # Use batched processing with configurable batch_size to reduce memory spikes
                 self.train_dataset = self.train_dataset.map(
                     self._format_chat_conversation, 
                     batched=True,
-                    batch_size=1000,
+                    batch_size=self.config.dataset_batch_size,
                     remove_columns=["conversations"]
                 )
                 if self.val_dataset:
                     self.val_dataset = self.val_dataset.map(
                         self._format_chat_conversation, 
                         batched=True,
-                        batch_size=1000,
+                        batch_size=self.config.dataset_batch_size,
                         remove_columns=["conversations"]
                     )
                 self._dataset_uses_text_field = True

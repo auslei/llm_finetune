@@ -34,6 +34,7 @@ class FineTuneConfig:
     use_gradient_checkpointing: Optional[Any] = None
     packing: Optional[bool] = None
     dataset_text_field: Optional[str] = None
+    dataset_batch_size: int = 1000  # Batch size for dataset processing operations
     val_split: float = 0.1
     load_in_4bit: bool = True
     save_gguf: bool = False

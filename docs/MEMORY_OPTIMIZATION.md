@@ -7,8 +7,10 @@ This document describes the memory optimization changes made to address high mem
 
 ### 1. Configuration (`src/llm_finetune/tuner_config.py`)
 - Added `streaming: bool = False` parameter to `FineTuneConfig` class
-- Default is `False` to maintain backward compatibility
+- Added `dataset_batch_size: int = 1000` parameter for configurable batch processing
+- Default is `False` for streaming to maintain backward compatibility
 - Users can enable streaming mode by setting `streaming=True`
+- Users can adjust batch size via `dataset_batch_size` parameter
 
 ### 2. Dataset Loading (`src/llm_finetune/finetune_tool.py`)
 
@@ -17,9 +19,10 @@ This document describes the memory optimization changes made to address high mem
 - When streaming is enabled, datasets are loaded incrementally rather than loading entire dataset into memory
 
 #### Batched Tokenization
-- Updated conversation formatting to use explicit `batch_size=1000` parameter
+- Updated conversation formatting to use configurable `batch_size` parameter (default: 1000)
 - Added `remove_columns` parameter to drop unused columns after processing
 - Reduces memory spikes during tokenization phase
+- Users can adjust batch size via `dataset_batch_size` config parameter
 
 #### Validation Methods
 - Updated all three validation methods to work with both streaming and non-streaming datasets:
@@ -65,8 +68,8 @@ Created comprehensive test suite:
 
 ### 2. Batched Tokenization
 - **Before**: Potentially processing large batches without explicit limits
-- **After**: Fixed batch size of 1000 samples
-- **Impact**: Prevents memory spikes during tokenization
+- **After**: Configurable batch size (default: 1000 samples)
+- **Impact**: Prevents memory spikes during tokenization; users can adjust based on available RAM
 
 ### 3. Column Removal
 - **Before**: All columns kept in memory throughout processing
@@ -95,6 +98,7 @@ tuner.train()
 training_data_path: "large_dataset.jsonl"
 mode: "pretrain"
 streaming: true
+dataset_batch_size: 500  # Optional: reduce if running low on memory
 ```
 
 ```bash
